@@ -1,0 +1,235 @@
+# IA-SPA: Interference-Aware Submodular Placement Algorithm
+
+[![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/)
+[![Sionna](https://img.shields.io/badge/Sionna-RT-green)](https://nvlabs.github.io/sionna/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
+Official implementation of the paper:
+
+> **Optimal Transmitter Placement in Realistic Urban Environments**  
+> Lukas Taus, Richard Tsai, Jeffrey G. Andrews  
+> Oden Institute, The University of Texas at Austin  
+> *Manuscript last updated April 10, 2026.*
+
+---
+
+## Overview
+
+IA-SPA is a mathematically rigorous framework for placing wireless transmitters
+(e.g. cellular base stations) in site-specific 3-D urban environments.  It
+combines:
+
+- **Sionna RT ray tracing** for high-fidelity, physically accurate path-gain fields
+- **Submodular greedy optimisation** with formal approximation guarantees (≥ 63% of
+  the global optimum for equal budget, Theorem III.2)
+- **An interference-aware quality functional S(T)** that balances coverage,
+  capacity, and interference
+
+Applied to San Francisco and Florence, IA-SPA achieves:
+
+| Scenario | Mean rate gain | Edge rate (5th pct) gain |
+|---|---|---|
+| AT&T (SF, P_MAX) | **+71%** | **+135%** |
+| T-Mobile (SF, P_MAX) | **+215%** | **+758%** |
+| Iliad (Florence, exclusion zone) | +30% | **+56%** |
+
+---
+
+## Repository Structure
+
+```
+ia_spa/                 # Core Python package
+├── __init__.py
+├── optimizer.py        # TowerOptimizer class and run_greedy()
+├── basis_functions.py  # SDF, candidate extraction, Sionna ray-trace loop
+└── metrics.py          # SINR / rate / interference evaluation
+
+scripts/                # Command-line entry points
+├── compute_basis_sf.py # Pre-compute SF ray-traced basis functions
+├── compute_basis_fl.py # Pre-compute Florence ray-traced basis functions
+├── run_optimizer.py    # Run the greedy IA-SPA loop
+├── evaluate_sf.py      # Evaluate results vs. AT&T / T-Mobile
+└── evaluate_fl.py      # Evaluate results vs. Iliad / TIM / Vodafone / WindTre
+
+notebooks/
+├── 01_algorithm_overview.ipynb   # Self-contained intro (no GPU needed)
+├── 02_san_francisco.ipynb        # Full SF pipeline
+└── 03_florence_advanced.ipynb    # Exclusionary zones + incremental deployment
+
+config/
+└── config.yaml         # All simulation parameters
+
+data/                   # (not tracked by git — see Data section below)
+├── TowerData/          # Reference carrier tower positions (.npy)
+├── MapData/            # SDF grids
+├── BasisFunctions/     # Pre-computed ray-traced rate maps
+└── Results/            # Greedy optimiser outputs
+```
+
+---
+
+## Installation
+
+### Requirements
+
+- Python 3.10+
+- NVIDIA GPU with ≥ 16 GB VRAM (A100 recommended)
+- CUDA 12.x, cuDNN 8.x
+
+### Steps
+
+```bash
+git clone https://github.com/<your-handle>/ia-spa.git
+cd ia-spa
+
+# Install Sionna (follow official instructions for your CUDA version)
+pip install sionna
+
+# Install remaining dependencies
+pip install -r requirements.txt
+
+# Install the ia_spa package in editable mode
+pip install -e .
+```
+
+---
+
+## Quick Start
+
+### 1 — Configure
+
+Copy and edit the configuration file:
+
+```bash
+cp config/config.yaml my_config.yaml
+```
+
+Key parameters in `config.yaml`:
+
+| Key | Default | Description |
+|---|---|---|
+| `scene.frequency_hz` | 1.8e9 | Carrier frequency (Hz) |
+| `transmitter.power_dbm` | 40.0 | TX power (dBm) |
+| `transmitter.tower_height_m` | 20.0 | Mast height above terrain (m) |
+| `link.bandwidth_hz` | 10e6 | System bandwidth (Hz) |
+| `optimizer.aggregation` | `max` | `max` (P_MAX) or `sum` (P_SUM) |
+| `optimizer.n_iter` | 20 | Number of transmitters to place |
+
+### 2 — Pre-compute Basis Functions (one-time, GPU required)
+
+```bash
+# San Francisco
+python scripts/compute_basis_sf.py --config my_config.yaml
+
+# Florence
+python scripts/compute_basis_fl.py --config my_config.yaml
+
+# Resume an interrupted run
+python scripts/compute_basis_sf.py --config my_config.yaml --resume
+```
+
+### 3 — Run the Optimiser
+
+```bash
+python scripts/run_optimizer.py \
+    --basis  data/BasisFunctions/SF \
+    --results data/Results/SF_max \
+    --n-iter 20 \
+    --aggregation max
+```
+
+**Warm-start from fixed towers (incremental deployment):**
+
+```bash
+python scripts/run_optimizer.py \
+    --basis  data/BasisFunctions/FL \
+    --results data/Results/FL_incremental \
+    --n-iter 20 \
+    --fixed-towers data/TowerData/FL_Iliad.npy \
+    --fixed-tower-indices 1 5 8
+```
+
+### 4 — Evaluate Against Reference Deployments
+
+```bash
+python scripts/evaluate_sf.py --results data/Results/SF_max
+python scripts/evaluate_fl.py --results data/Results/FL_max
+```
+
+Results (SINR, rate, interference maps as `.npy`) are saved to
+`data/Results/SF_max_Processed/`.
+
+---
+
+## Notebooks
+
+| Notebook | Description | GPU needed? |
+|---|---|---|
+| `01_algorithm_overview.ipynb` | Math and synthetic demo | ❌ No |
+| `02_san_francisco.ipynb` | Full SF workflow | ✅ Yes |
+| `03_florence_advanced.ipynb` | Exclusionary zones, incremental | ✅ Yes |
+
+---
+
+## Data
+
+Reference tower locations are sourced from:
+
+- **San Francisco** — [City and County of San Francisco Open Data](https://data.sfgov.org/Geographic-Locations-and-Boundaries/Existing-Commercial-Wireless-Telecommunication-Ser/aa26-h926)
+- **Florence (Iliad, TIM, Vodafone, WindTre)** — [OpenCellID](https://opencellid.org/)
+
+Place the processed `.npy` files in `data/TowerData/`:
+
+```
+data/TowerData/
+├── SF_ATT.npy
+├── SF_TMobile.npy
+├── SF_ATT_TMobile.npy
+├── FL_Iliad.npy
+├── FL_TIM.npy
+├── FL_Vodafone.npy
+└── FL_WindTre.npy
+```
+
+Each file contains an (N, 3) array of (x, y, z) coordinates in the Sionna
+scene's local coordinate system (metres).
+
+---
+
+## Algorithm Summary
+
+```
+T = []  (or T = T_fixed for incremental deployment)
+while |T| < k:
+    for each candidate x ∈ X:
+        compute G(x|T) = S(T ∪ {x}) − S(T)
+    select x* = argmax G(x|T)
+    T ← T ∪ {x*}
+```
+
+where
+
+$$S(T) = \mathbb{E}_{y \sim f}\left[\bar{W}\!\left(\max_{t \in T} P(y,t)\right)\right], \quad \bar{W}(x) = \frac{x}{x+c}$$
+
+**Guarantee (Theorem III.2):**  With $n = k$ iterations and $\epsilon = 0$,
+
+$$S(T_n) \geq \left(1 - e^{-1}\right) S(T^*_k) \approx 0.632 \cdot S(T^*_k)$$
+
+---
+
+## Citation
+
+```bibtex
+@article{taus2026iaspa,
+  title   = {Optimal Transmitter Placement in Realistic Urban Environments},
+  author  = {Taus, Lukas and Tsai, Richard and Andrews, Jeffrey G.},
+  year    = {2026},
+  note    = {Preprint}
+}
+```
+
+---
+
+## License
+
+This project is released under the [MIT License](LICENSE).

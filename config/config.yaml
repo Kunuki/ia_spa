@@ -1,0 +1,77 @@
+# ============================================================
+# IA-SPA Configuration File
+# ============================================================
+# All physical units are SI unless noted otherwise.
+# Edit this file to reproduce the paper's experiments or adapt
+# to a new scene / carrier dataset.
+
+# ----------------------------------------------------------
+# File system paths
+# ----------------------------------------------------------
+paths:
+  # Pre-computed ray-traced rate maps (output of compute_basis.py)
+  basis_functions_sf: data/BasisFunctions/SF
+  basis_functions_fl: data/BasisFunctions/FL
+
+  # Reference carrier tower locations (.npy arrays, shape N x 3)
+  tower_data: data/TowerData
+
+  # Greedy optimiser outputs
+  results: data/Results
+
+# ----------------------------------------------------------
+# Scene parameters
+# ----------------------------------------------------------
+scene:
+  frequency_hz: 1.8e9       # Carrier frequency  [Hz]
+
+# ----------------------------------------------------------
+# Transmitter parameters
+# ----------------------------------------------------------
+transmitter:
+  power_dbm: 40.0           # Transmit power  [dBm]
+  tower_height_m: 20.0      # Height above terrain used for reference towers  [m]
+
+# ----------------------------------------------------------
+# Receiver parameters
+# ----------------------------------------------------------
+receiver:
+  # Heights at which radio maps are computed and then averaged
+  heights_m: [1.5, 5.0, 10.0, 20.0]
+
+# ----------------------------------------------------------
+# Radio-map solver parameters
+# ----------------------------------------------------------
+radio_map:
+  max_depth: 5              # Ray-tracing recursion depth
+  samples_per_tx: 1000000   # Monte Carlo rays per transmitter  (1e6)
+  cell_size_m: 1.0          # Radio-map pixel resolution  [m]
+
+# ----------------------------------------------------------
+# Link budget
+# ----------------------------------------------------------
+link:
+  bandwidth_hz: 10.0e6      # System bandwidth  [Hz]  (10 MHz)
+  snr_gap_gamma: 2.0        # Shannon SNR gap Gamma
+
+# ----------------------------------------------------------
+# Candidate location selection
+# ----------------------------------------------------------
+candidates:
+  # Candidate-selection mode:
+  #   "grid" -- uniform 3-D grid over the full scene bounding box (default)
+  #   "user" -- provide positions explicitly via --user-positions in compute_basis.py
+  mode: grid
+
+  # Grid step sizes in metres (used when mode = "grid")
+  dx_m: 20.0
+  dy_m: 20.0
+  dz_m: 20.0
+
+# ----------------------------------------------------------
+# Optimiser
+# ----------------------------------------------------------
+optimizer:
+  aggregation: max          # 'max' (P_MAX, realistic) or 'sum' (P_SUM, upper bound)
+  n_iter: 20                # Number of transmitters to place per run
+  utility_c: 1.0e8          # Saturation constant c in W_bar(x) = x / (x + c)
