@@ -57,12 +57,6 @@ import plotly.graph_objects as go
 from scipy.spatial import cKDTree
 from tqdm import tqdm
 
-from sionna.rt import (
-    PlanarArray,
-    RadioMapSolver,
-    Transmitter,
-)
-
 
 # ---------------------------------------------------------------------------
 # Candidate location selection
@@ -313,6 +307,8 @@ def compute_basis_functions(
         Index of the first candidate to process.  Set automatically by
         :func:`compute_basis_functions_resume`; leave at 0 for a fresh run.
     """
+    from sionna.rt import PlanarArray, RadioMapSolver, Transmitter  # GPU required
+
     output_folder = Path(output_folder)
     sionna_dir = output_folder / "Sionna"
     sionna_dir.mkdir(parents=True, exist_ok=True)

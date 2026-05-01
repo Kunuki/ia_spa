@@ -1,3 +1,18 @@
+Metadata-Version: 2.1
+Name: ia-spa
+Version: 0.1.0
+Summary: Interference-Aware Submodular Placement Algorithm for optimal wireless transmitter placement
+Home-page: https://github.com/<your-handle>/ia-spa
+Author: Lukas Taus, Richard Tsai, Jeffrey G. Andrews
+License: MIT
+Classifier: Programming Language :: Python :: 3
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Topic :: Scientific/Engineering :: Artificial Intelligence
+Classifier: Topic :: Scientific/Engineering :: Physics
+Requires-Python: >=3.10
+Description-Content-Type: text/markdown
+License-File: LICENSE
+
 # IA-SPA: Interference-Aware Submodular Placement Algorithm
 
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/)
@@ -48,7 +63,8 @@ ia_spa/                 # Core Python package
 └── metrics.py          # SINR / rate / interference evaluation
 
 scripts/                # Command-line entry points
-├── compute_basis.py    # Pre-compute ray-traced basis functions (any scene)
+├── compute_basis_sf.py # Pre-compute SF ray-traced basis functions
+├── compute_basis_fl.py # Pre-compute Florence ray-traced basis functions
 ├── run_optimizer.py    # Run the greedy IA-SPA loop
 ├── evaluate_sf.py      # Evaluate results vs. AT&T / T-Mobile
 └── evaluate_fl.py      # Evaluate results vs. Iliad / TIM / Vodafone / WindTre
@@ -100,14 +116,13 @@ pip install -e .
 
 ### 1 — Configure
 
-The repository ships with `config/config.yaml` as a ready-to-use template.
-Edit it directly, or copy it elsewhere and pass the path via `--config`:
+Copy and edit the configuration file:
 
 ```bash
-cp config/config.yaml my_config.yaml   # optional — scripts default to config/config.yaml
+cp config/config.yaml my_config.yaml
 ```
 
-Key parameters in `config/config.yaml`:
+Key parameters in `config.yaml`:
 
 | Key | Default | Description |
 |---|---|---|
@@ -122,24 +137,14 @@ Key parameters in `config/config.yaml`:
 
 ```bash
 # San Francisco
-python scripts/compute_basis.py \
-    --scene san_francisco \
-    --output data/BasisFunctions/SF
+python scripts/compute_basis_sf.py --config my_config.yaml
 
 # Florence
-python scripts/compute_basis.py \
-    --scene florence \
-    --output data/BasisFunctions/FL
+python scripts/compute_basis_fl.py --config my_config.yaml
 
 # Resume an interrupted run
-python scripts/compute_basis.py \
-    --scene san_francisco \
-    --output data/BasisFunctions/SF \
-    --resume
+python scripts/compute_basis_sf.py --config my_config.yaml --resume
 ```
-
-Grid spacing and all physical parameters are read from `config/config.yaml`
-and can be overridden per-run with `--dx`, `--dy`, `--dz`, or `--config`.
 
 ### 3 — Run the Optimiser
 

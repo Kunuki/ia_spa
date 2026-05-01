@@ -10,8 +10,10 @@ Sionna scene object already in memory.
 
 Reference
 ---------
-Taus, Tsai, Andrews. "Optimal Transmitter Placement in Realistic Urban
-Environments." (2026).
+L. Taus, R. Tsai, and J. G. Andrews, "Optimal Transmitter Placement in
+Realistic Urban Environments," submitted to IEEE Transactions on Wireless
+Communications, arXiv:2604.28153 [cs.IT], Apr. 2026.
+https://arxiv.org/abs/2604.28153
 """
 
 from ia_spa.optimizer import TowerOptimizer, run_greedy, w_bar

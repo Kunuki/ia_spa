@@ -29,8 +29,6 @@ from typing import List, Optional, Sequence
 
 import numpy as np
 
-from sionna.rt import PlanarArray, RadioMapSolver, Transmitter
-
 
 def compute_metrics(
     sionna_scene,
@@ -78,6 +76,8 @@ def compute_metrics(
     interf_dbm : np.ndarray
         Height-averaged interference power map (dBm).
     """
+    from sionna.rt import RadioMapSolver, Transmitter  # GPU required
+
     # Remove any existing transmitters and add the new set
     for tx_name in list(sionna_scene.transmitters.keys()):
         sionna_scene.remove(tx_name)

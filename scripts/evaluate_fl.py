@@ -23,7 +23,7 @@ from ia_spa.metrics import evaluate_and_save, load_greedy_positions
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser()
     p.add_argument("--results", required=True)
-    p.add_argument("--config", default="config.yaml")
+    p.add_argument("--config", default="config/config.yaml")
     return p.parse_args()
 
 

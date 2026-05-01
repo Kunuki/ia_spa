@@ -6,8 +6,10 @@ Core implementation of the Interference-Aware Submodular Placement Algorithm (IA
 This module provides the `TowerOptimizer` class, which encapsulates the aggregated
 network quality functional S(T) and the greedy placement loop described in:
 
-    Taus, Tsai, Andrews. "Optimal Transmitter Placement in Realistic Urban
-    Environments." (2026).
+    L. Taus, R. Tsai, and J. G. Andrews, "Optimal Transmitter Placement in
+    Realistic Urban Environments," submitted to IEEE Transactions on Wireless
+    Communications, arXiv:2604.28153 [cs.IT], Apr. 2026.
+    https://arxiv.org/abs/2604.28153
 
 The key algorithmic idea is to iteratively select the candidate transmitter location
 that maximises the marginal gain G(x|T) = S(T ∪ {x}) − S(T), where S(T) is the
