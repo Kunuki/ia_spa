@@ -23,6 +23,9 @@ Usage
 
     # Evaluate only the first N towers:
     python -m scripts.evaluate --results data/Results/SF_max --n-towers 10
+
+    # Save a two-panel rate / SINR map PNG with tower locations overlaid:
+    python -m scripts.evaluate --results data/Results/SF_max --plot
 """
 
 import argparse
@@ -33,7 +36,7 @@ import numpy as np
 import yaml
 from sionna.rt import PlanarArray, load_scene, scene as sionna_scenes
 
-from ia_spa.metrics import evaluate_and_save, load_greedy_positions
+from ia_spa.metrics import evaluate_and_save, load_greedy_positions, plot_evaluation
 
 _BUILTIN_SCENES = {
     "san_francisco": "san_francisco",
@@ -83,6 +86,11 @@ def parse_args() -> argparse.Namespace:
     p.add_argument(
         "--n-towers", type=int, default=None,
         help="Evaluate only the first N towers. Defaults to all.",
+    )
+    p.add_argument(
+        "--plot", action="store_true",
+        help="Save a two-panel PNG showing the rate map and SINR map "
+             "with placed towers overlaid (saved to <results>_Processed/).",
     )
     p.add_argument(
         "--config", default="config/config.yaml",
@@ -144,6 +152,17 @@ def main() -> None:
         scene, run_name, positions, save_dir,
         heights, power_dbm, bandwidth_hz, snr_gap_gamma,
     )
+
+    if args.plot:
+        rate = np.load(save_dir / f"{run_name}_rate.npy")
+        sinr = np.load(save_dir / f"{run_name}_sinr.npy")
+        bbox = scene._scene.bbox()
+        scene_bbox = (bbox.min[0], bbox.min[1]), (bbox.max[0], bbox.max[1])
+        plot_evaluation(
+            rate, sinr, positions,
+            save_path=save_dir / f"{run_name}_map.png",
+            scene_bbox=scene_bbox,
+        )
 
     print(f"Results saved to '{save_dir}'.")
 

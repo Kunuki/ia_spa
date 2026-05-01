@@ -174,8 +174,19 @@ python -m scripts.evaluate \
     --scene path/to/my_scene.xml
 ```
 
-SINR, rate, and interference maps (`.npy`) plus a printed summary are saved to
-`data/Results/SF_max_Processed/`.
+SINR, rate, and interference maps (`.npy`) plus a printed summary (mean rate,
+5th-percentile rate, mean SINR) are saved to `data/Results/SF_max_Processed/`.
+
+**Optional flags:**
+
+| Flag | Description |
+|---|---|
+| `--plot` | Save a two-panel PNG (`*_map.png`) showing the rate map and SINR map with tower locations overlaid |
+| `--n-towers N` | Evaluate only the first N towers from `Locations.txt` |
+
+```bash
+python -m scripts.evaluate --results data/Results/SF_max --plot
+```
 
 ---
 

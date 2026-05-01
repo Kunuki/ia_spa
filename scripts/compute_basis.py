@@ -47,6 +47,7 @@ produce near-zero radio maps and will never be selected by the optimizer.
 """
 
 import argparse
+import shutil
 import sys
 from pathlib import Path
 
@@ -147,22 +148,40 @@ def main() -> None:
     dy = args.dy if args.dy is not None else float(cand_cfg.get("dy_m", 20.0))
     dz = args.dz if args.dz is not None else float(cand_cfg.get("dz_m", 20.0))
 
+    print(
+        f"Config: power={power_dbm} dBm, freq={frequency_hz/1e9:.3f} GHz, "
+        f"BW={bandwidth_hz/1e6:.1f} MHz, samples_per_tx={samples_per_tx:,}, "
+        f"max_depth={max_depth}"
+    )
+
+    sionna_dir = output_folder / "Sionna"
+    coord_file = sionna_dir / "0_Coordinates.txt"
+
     # ------------------------------------------------------------------
     # Step 1: Determine candidate locations
     # ------------------------------------------------------------------
-    coord_file = output_folder / "Sionna" / "0_Coordinates.txt"
-
-    if coord_file.exists() and not args.resume:
-        # Coordinates already exist from a previous (possibly incomplete) run
-        print(f"Loading existing candidate coordinates from {coord_file}")
-        with open(coord_file) as fh:
-            candidates = np.array(
-                [[float(v) for v in line.strip().split(", ")[1:]] for line in fh]
+    if args.resume:
+        # Validate that a previous run exists to resume from
+        if not coord_file.exists():
+            sys.exit(
+                f"ERROR: --resume specified but no existing run found at '{output_folder}'.\n"
+                f"Run without --resume to start a fresh computation."
             )
-        print(f"  {len(candidates)} candidates loaded.")
+        print(f"Resuming existing run in '{output_folder}'.")
 
     else:
-        # Need to compute candidates -- load scene for bbox
+        # Fresh run: delete any existing output and recompute from scratch
+        if output_folder.exists():
+            ans = input(
+                f"Output folder '{output_folder}' already exists.\n"
+                f"Delete it and recompute from scratch? [y/N] "
+            )
+            if ans.strip().lower() != "y":
+                sys.exit("Aborted.")
+            shutil.rmtree(output_folder)
+            print(f"Deleted '{output_folder}'.")
+
+        # Compute candidate positions
         scene_for_bbox = _load_scene(args.scene, merge_shapes=False)
 
         if args.user_positions is not None:
@@ -185,26 +204,19 @@ def main() -> None:
     # ------------------------------------------------------------------
     scene_rt = _load_scene(args.scene, merge_shapes=True)
 
+    params = dict(
+        power_dbm=power_dbm,
+        bandwidth_hz=bandwidth_hz,
+        snr_gap_gamma=snr_gap_gamma,
+        max_depth=max_depth,
+        samples_per_tx=samples_per_tx,
+        frequency_hz=frequency_hz,
+    )
+
     if args.resume:
-        compute_basis_functions_resume(
-            output_folder, scene_rt,
-            power_dbm=power_dbm,
-            bandwidth_hz=bandwidth_hz,
-            snr_gap_gamma=snr_gap_gamma,
-            max_depth=max_depth,
-            samples_per_tx=samples_per_tx,
-            frequency_hz=frequency_hz,
-        )
+        compute_basis_functions_resume(output_folder, scene_rt, **params)
     else:
-        compute_basis_functions(
-            scene_rt, candidates, output_folder,
-            power_dbm=power_dbm,
-            bandwidth_hz=bandwidth_hz,
-            snr_gap_gamma=snr_gap_gamma,
-            max_depth=max_depth,
-            samples_per_tx=samples_per_tx,
-            frequency_hz=frequency_hz,
-        )
+        compute_basis_functions(scene_rt, candidates, output_folder, **params)
 
     print("Done.")
 

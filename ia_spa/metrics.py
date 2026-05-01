@@ -197,3 +197,78 @@ def evaluate_and_save(
         f"5th pct: {np.percentile(rate, 5) / 1e6:.2f} Mbps  |  "
         f"Mean SINR: {10 * np.log10(sinr.mean()):.1f} dB"
     )
+
+
+def plot_evaluation(
+    rate: np.ndarray,
+    sinr: np.ndarray,
+    positions: np.ndarray,
+    save_path: str | Path,
+    scene_bbox: Optional[tuple] = None,
+) -> None:
+    """Save a two-panel figure: rate map and SINR map, both with tower scatter.
+
+    Parameters
+    ----------
+    rate : np.ndarray, shape (H, W)
+        Height-averaged achievable rate map in bps.
+    sinr : np.ndarray, shape (H, W)
+        Height-averaged SINR map (linear).
+    positions : np.ndarray, shape (N, 3)
+        World-space (x, y, z) of the placed transmitters.
+    save_path : str or Path
+        Output PNG file path.
+    scene_bbox : ((x_min, y_min), (x_max, y_max)) or None
+        Scene bounding box in metres.  Used to label axes.  When *None*,
+        axes are in pixels.
+    """
+    import matplotlib.pyplot as plt
+    from matplotlib.colors import LogNorm
+
+    fig, axes = plt.subplots(1, 2, figsize=(14, 6))
+
+    if scene_bbox is not None:
+        (x_min, y_min), (x_max, y_max) = scene_bbox
+        extent = [x_min, x_max, y_min, y_max]
+        xlabel, ylabel = "X (m)", "Y (m)"
+        tx_x, tx_y = positions[:, 0], positions[:, 1]
+    else:
+        extent = None
+        xlabel, ylabel = "Pixel X", "Pixel Y"
+        H, W = rate.shape
+        tx_x = positions[:, 0]
+        tx_y = positions[:, 1]
+
+    # Rate map (Mbps)
+    ax = axes[0]
+    im0 = ax.imshow(
+        rate.T / 1e6, origin="lower", aspect="equal",
+        extent=extent, cmap="viridis",
+    )
+    ax.scatter(tx_x, tx_y, c="red", s=40, marker="^", zorder=5, label="Towers")
+    ax.set_title("Achievable Rate (Mbps)")
+    ax.set_xlabel(xlabel)
+    ax.set_ylabel(ylabel)
+    ax.legend(fontsize=8)
+    fig.colorbar(im0, ax=ax, label="Rate (Mbps)")
+
+    # SINR map (dB)
+    ax = axes[1]
+    sinr_db = 10 * np.log10(np.maximum(sinr, 1e-10))
+    im1 = ax.imshow(
+        sinr_db.T, origin="lower", aspect="equal",
+        extent=extent, cmap="plasma",
+    )
+    ax.scatter(tx_x, tx_y, c="red", s=40, marker="^", zorder=5, label="Towers")
+    ax.set_title("SINR (dB)")
+    ax.set_xlabel(xlabel)
+    ax.set_ylabel(ylabel)
+    ax.legend(fontsize=8)
+    fig.colorbar(im1, ax=ax, label="SINR (dB)")
+
+    fig.tight_layout()
+    save_path = Path(save_path)
+    save_path.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(save_path, dpi=150, bbox_inches="tight")
+    plt.close(fig)
+    print(f"Plot saved -> {save_path}")
