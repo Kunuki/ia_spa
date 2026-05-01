@@ -6,31 +6,31 @@ Pre-compute per-candidate ray-traced rate maps for any Sionna scene.
 Usage
 -----
     # Built-in San Francisco scene, uniform 3-D grid:
-    python scripts/compute_basis.py \\
+    python -m scripts.compute_basis \\
         --scene san_francisco \\
         --output data/BasisFunctions/SF \\
         --dx 20 --dy 20 --dz 20
 
     # Built-in Florence scene, same grid:
-    python scripts/compute_basis.py \\
+    python -m scripts.compute_basis \\
         --scene florence \\
         --output data/BasisFunctions/FL \\
         --dx 15 --dy 15 --dz 10
 
     # Custom scene from an XML file:
-    python scripts/compute_basis.py \\
+    python -m scripts.compute_basis \\
         --scene path/to/my_scene.xml \\
         --output data/BasisFunctions/MyScene \\
         --dx 20 --dy 20 --dz 20
 
     # User-supplied candidate positions (N x 3 .npy or whitespace .txt):
-    python scripts/compute_basis.py \\
+    python -m scripts.compute_basis \\
         --scene san_francisco \\
         --output data/BasisFunctions/SF_custom \\
         --user-positions path/to/candidates.npy
 
     # Resume an interrupted run:
-    python scripts/compute_basis.py \\
+    python -m scripts.compute_basis \\
         --scene san_francisco \\
         --output data/BasisFunctions/SF \\
         --resume
@@ -177,6 +177,7 @@ def main() -> None:
             )
 
         output_folder.mkdir(parents=True, exist_ok=True)
+        (output_folder / "scene.txt").write_text(args.scene)
         candidate_locations_plot(candidates, output_folder / "candidate_locations.html")
 
     # ------------------------------------------------------------------

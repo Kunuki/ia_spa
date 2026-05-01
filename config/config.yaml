@@ -30,7 +30,6 @@ scene:
 # ----------------------------------------------------------
 transmitter:
   power_dbm: 40.0           # Transmit power  [dBm]
-  tower_height_m: 20.0      # Height above terrain used for reference towers  [m]
 
 # ----------------------------------------------------------
 # Receiver parameters

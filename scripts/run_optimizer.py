@@ -6,19 +6,18 @@ Run the IA-SPA greedy optimiser on pre-computed basis functions.
 Usage
 -----
     # Standard run (max aggregation, 20 new towers):
-    python scripts/run_optimizer.py \\
+    python -m scripts.run_optimizer \\
         --basis BasisFunctions/SF \\
         --results Results/SF_max \\
         --n-iter 20 \\
         --aggregation max
 
-    # Warm-start from existing Iliad towers (Florence fixed-deployment scenario):
-    python scripts/run_optimizer.py \\
+    # Warm-start from pre-placed towers (incremental deployment):
+    python -m scripts.run_optimizer \\
         --basis BasisFunctions/FL \\
         --results Results/FL_warmstart \\
         --n-iter 20 \\
-        --fixed-towers TowerData/FL_Iliad.npy \\
-        --fixed-tower-indices 1 5 8
+        --preplaced-towers TowerData/FL_Iliad.npy
 
 The script writes to *results*:
     Locations.txt        — (x, y, z) of each selected transmitter, one per line
@@ -46,16 +45,11 @@ def parse_args() -> argparse.Namespace:
         help="Aggregation rule: 'max' (P_MAX) or 'sum' (P_SUM)",
     )
     p.add_argument(
-        "--fixed-towers",
+        "--preplaced-towers",
         default=None,
-        help="Path to .npy file of fixed (pre-existing) tower positions (N×3)",
-    )
-    p.add_argument(
-        "--fixed-tower-indices",
-        nargs="+",
-        type=int,
-        default=None,
-        help="Row indices into --fixed-towers to use (default: all rows)",
+        help="Path to a .npy (N×3) or whitespace-delimited .txt file of "
+             "pre-placed tower XYZ positions to warm-start from. "
+             "If omitted, no towers are pre-placed.",
     )
     p.add_argument(
         "--utility-c",
@@ -69,23 +63,29 @@ def parse_args() -> argparse.Namespace:
 def main() -> None:
     args = parse_args()
 
+    basis_folder = Path(args.basis)
+    results_folder = Path(args.results)
+    results_folder.mkdir(parents=True, exist_ok=True)
+
+    scene_file = basis_folder / "scene.txt"
+    if scene_file.exists():
+        (results_folder / "scene.txt").write_text(scene_file.read_text())
+
     optimizer = TowerOptimizer(
-        basis_folder=args.basis,
+        basis_folder=basis_folder,
         aggregation=args.aggregation,
         utility_c=args.utility_c,
     )
 
     fixed_towers = None
-    if args.fixed_towers is not None:
-        towers = np.load(args.fixed_towers)
-        if args.fixed_tower_indices is not None:
-            towers = towers[args.fixed_tower_indices, :]
-        fixed_towers = towers
-        print(f"Using {len(fixed_towers)} fixed transmitter(s) as warm-start.")
+    if args.preplaced_towers is not None:
+        p = Path(args.preplaced_towers)
+        fixed_towers = np.load(p) if p.suffix == ".npy" else np.loadtxt(p)
+        print(f"Using {len(fixed_towers)} pre-placed transmitter(s) as warm-start.")
 
     run_greedy(
         optimizer=optimizer,
-        results_folder=args.results,
+        results_folder=results_folder,
         n_iter=args.n_iter,
         fixed_towers=fixed_towers,
     )

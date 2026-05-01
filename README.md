@@ -50,8 +50,7 @@ ia_spa/                 # Core Python package
 scripts/                # Command-line entry points
 ├── compute_basis.py    # Pre-compute ray-traced basis functions (any scene)
 ├── run_optimizer.py    # Run the greedy IA-SPA loop
-├── evaluate_sf.py      # Evaluate results vs. AT&T / T-Mobile
-└── evaluate_fl.py      # Evaluate results vs. Iliad / TIM / Vodafone / WindTre
+└── evaluate.py         # Evaluate results: load positions, compute and save metrics
 
 notebooks/
 ├── 01_algorithm_overview.ipynb   # Self-contained intro (no GPU needed)
@@ -113,7 +112,6 @@ Key parameters in `config/config.yaml`:
 |---|---|---|
 | `scene.frequency_hz` | 1.8e9 | Carrier frequency (Hz) |
 | `transmitter.power_dbm` | 40.0 | TX power (dBm) |
-| `transmitter.tower_height_m` | 20.0 | Mast height above terrain (m) |
 | `link.bandwidth_hz` | 10e6 | System bandwidth (Hz) |
 | `optimizer.aggregation` | `max` | `max` (P_MAX) or `sum` (P_SUM) |
 | `optimizer.n_iter` | 20 | Number of transmitters to place |
@@ -122,17 +120,17 @@ Key parameters in `config/config.yaml`:
 
 ```bash
 # San Francisco
-python scripts/compute_basis.py \
+python -m scripts.compute_basis \
     --scene san_francisco \
     --output data/BasisFunctions/SF
 
 # Florence
-python scripts/compute_basis.py \
+python -m scripts.compute_basis \
     --scene florence \
     --output data/BasisFunctions/FL
 
 # Resume an interrupted run
-python scripts/compute_basis.py \
+python -m scripts.compute_basis \
     --scene san_francisco \
     --output data/BasisFunctions/SF \
     --resume
@@ -144,32 +142,39 @@ and can be overridden per-run with `--dx`, `--dy`, `--dz`, or `--config`.
 ### 3 — Run the Optimiser
 
 ```bash
-python scripts/run_optimizer.py \
+python -m scripts.run_optimizer \
     --basis  data/BasisFunctions/SF \
     --results data/Results/SF_max \
     --n-iter 20 \
     --aggregation max
 ```
 
-**Warm-start from fixed towers (incremental deployment):**
+**Warm-start from pre-placed towers (incremental deployment):**
 
 ```bash
-python scripts/run_optimizer.py \
+python -m scripts.run_optimizer \
     --basis  data/BasisFunctions/FL \
     --results data/Results/FL_incremental \
     --n-iter 20 \
-    --fixed-towers data/TowerData/FL_Iliad.npy \
-    --fixed-tower-indices 1 5 8
+    --preplaced-towers data/TowerData/FL_Iliad.npy
 ```
 
-### 4 — Evaluate Against Reference Deployments
+### 4 — Evaluate Results
 
 ```bash
-python scripts/evaluate_sf.py --results data/Results/SF_max
-python scripts/evaluate_fl.py --results data/Results/FL_max
+python -m scripts.evaluate --results data/Results/SF_max
 ```
 
-Results (SINR, rate, interference maps as `.npy`) are saved to
+The scene is read automatically from `data/Results/SF_max/scene.txt` (written
+by `run_optimizer.py`).  Pass `--scene` to override:
+
+```bash
+python -m scripts.evaluate \
+    --results data/Results/MyScene_max \
+    --scene path/to/my_scene.xml
+```
+
+SINR, rate, and interference maps (`.npy`) plus a printed summary are saved to
 `data/Results/SF_max_Processed/`.
 
 ---

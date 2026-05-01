@@ -6,9 +6,8 @@ multi-height Sionna evaluation, and save SINR / rate / interference maps.
 
 This corresponds to the ``data_formatter_*.py`` scripts, refactored into a
 single scene-agnostic function with explicit parameters rather than relying on
-a fixed ``config.yaml`` path.  The ``main`` entry points in
-``scripts/evaluate_sf.py`` and ``scripts/evaluate_fl.py`` call these helpers
-after reading the config.
+a fixed ``config.yaml`` path.  The ``main`` entry point in
+``scripts/evaluate.py`` calls these helpers after reading the config.
 
 Theory
 ------
