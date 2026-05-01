@@ -238,11 +238,11 @@ while |T| < k:
 
 where
 
-$$S(T) = \mathbb{E}_{y \sim f}\left[\bar{W}\!\left(\max_{t \in T} P(y,t)\right)\right], \quad \bar{W}(x) = \frac{x}{x+c}$$
+$$S(T) = \mathbb{E}_{y \sim f}\left[\bar{W}\\left(\max_{t \in T} P(y,t)\right)\right], \quad \bar{W}(x) = \frac{x}{x+c}$$
 
 **Guarantee (Theorem III.2):**  With $n = k$ iterations and $\epsilon = 0$,
 
-$$S(T_n) \geq \left(1 - e^{-1}\right) S(T^*_k) \approx 0.632 \cdot S(T^*_k)$$
+$$S(T_n) \geq (1 - e^{-1}) S(T^*_k) \approx 0.632 \cdot S(T^*_k)$$
 
 ---
 
