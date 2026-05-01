@@ -243,7 +243,8 @@ $$S(T) = \mathbb{E}_{y \sim f}\left[\bar{W}\\left(\max_{t \in T} P(y,t)\right)\r
 **Guarantee (Theorem III.2):**  With $n = k$ iterations and $\epsilon = 0$,
 
 ```math
-S(T_n) \geq (1 - e^{-1}) S(T^*_k) \approx 0.632 \cdot S(T^*_k)
+S(T_n) \geq (1 - e^{-1}) S(T^{*}_k) \approx 0.632 \cdot S(T^{*}_k)
+
 ---
 
 ## Citation
