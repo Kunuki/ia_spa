@@ -24,20 +24,23 @@ config before being saved to disk.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import List, Optional, Sequence
+from typing import Optional, Sequence
 
 import numpy as np
+
+from ia_spa.data import load_locations
 
 
 def compute_metrics(
     sionna_scene,
     positions: np.ndarray,
     receiver_heights: Sequence[float] = (1.5, 5.0, 10.0),
-    power_dbm: float = 42.0,
-    bandwidth_hz: float = 20e6,
+    power_dbm: float = 40.0,
+    bandwidth_hz: float = 10e6,
     snr_gap_gamma: float = 2.0,
     max_depth: int = 10,
     samples_per_tx: int = int(1e6),
+    cell_size_m: float = 1.0,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Evaluate SINR, rate, and interference for a transmitter configuration.
 
@@ -65,6 +68,8 @@ def compute_metrics(
         Ray-tracing recursion depth.
     samples_per_tx : int
         Monte Carlo ray samples per transmitter.
+    cell_size_m : float
+        Radio-map pixel resolution in metres.
 
     Returns
     -------
@@ -76,6 +81,10 @@ def compute_metrics(
         Height-averaged interference power map (dBm).
     """
     from sionna.rt import RadioMapSolver, Transmitter  # GPU required
+
+    positions = np.asarray(positions, dtype=float).reshape(-1, 3)
+    if len(positions) == 0:
+        raise ValueError("compute_metrics needs at least one transmitter position.")
 
     # Remove any existing transmitters and add the new set
     for tx_name in list(sionna_scene.transmitters.keys()):
@@ -106,7 +115,7 @@ def compute_metrics(
             center=center_xy + [height],
             orientation=[0.0, 0.0, 0.0],
             size=size_xy,
-            cell_size=[1.0, 1.0],
+            cell_size=[cell_size_m, cell_size_m],
             max_depth=max_depth,
             samples_per_tx=samples_per_tx,
         )
@@ -145,10 +154,7 @@ def load_greedy_positions(results_folder: str | Path) -> np.ndarray:
     -------
     np.ndarray, shape (N, 3)
     """
-    path = Path(results_folder) / "Locations.txt"
-    with open(path) as fh:
-        rows = [[float(v) for v in line.strip().split(", ")] for line in fh]
-    return np.array(rows)
+    return load_locations(Path(results_folder) / "Locations.txt")
 
 
 def evaluate_and_save(
@@ -157,9 +163,10 @@ def evaluate_and_save(
     positions: np.ndarray,
     save_dir: str | Path,
     receiver_heights: Sequence[float] = (1.5, 5.0, 10.0),
-    power_dbm: float = 42.0,
-    bandwidth_hz: float = 20e6,
+    power_dbm: float = 40.0,
+    bandwidth_hz: float = 10e6,
     snr_gap_gamma: float = 2.0,
+    cell_size_m: float = 1.0,
 ) -> None:
     """Compute metrics for *positions* and save ``{name}_{sinr,rate,interf,pos}.npy``.
 
@@ -172,7 +179,7 @@ def evaluate_and_save(
     positions : np.ndarray, shape (N, 3)
     save_dir : str or Path
         Output directory (created if absent).
-    receiver_heights, power_dbm, bandwidth_hz, snr_gap_gamma :
+    receiver_heights, power_dbm, bandwidth_hz, snr_gap_gamma, cell_size_m :
         Forwarded to :func:`compute_metrics`.
     """
     save_dir = Path(save_dir)
@@ -186,6 +193,7 @@ def evaluate_and_save(
         power_dbm=power_dbm,
         bandwidth_hz=bandwidth_hz,
         snr_gap_gamma=snr_gap_gamma,
+        cell_size_m=cell_size_m,
     )
 
     np.save(save_dir / f"{name}_sinr.npy", sinr)
@@ -223,7 +231,6 @@ def plot_evaluation(
         axes are in pixels.
     """
     import matplotlib.pyplot as plt
-    from matplotlib.colors import LogNorm
 
     fig, axes = plt.subplots(1, 2, figsize=(14, 6))
 
@@ -233,11 +240,11 @@ def plot_evaluation(
         xlabel, ylabel = "X (m)", "Y (m)"
         tx_x, tx_y = positions[:, 0], positions[:, 1]
     else:
+        # Without a bounding box the axes are in pixels, and the world-space
+        # tower coordinates cannot be placed on them, so they are omitted.
         extent = None
         xlabel, ylabel = "Pixel X", "Pixel Y"
-        H, W = rate.shape
-        tx_x = positions[:, 0]
-        tx_y = positions[:, 1]
+        tx_x = tx_y = None
 
     # Rate map (Mbps)
     ax = axes[0]
@@ -245,11 +252,12 @@ def plot_evaluation(
         rate.T / 1e6, origin="lower", aspect="equal",
         extent=extent, cmap="viridis",
     )
-    ax.scatter(tx_x, tx_y, c="red", s=40, marker="^", zorder=5, label="Towers")
+    if tx_x is not None:
+        ax.scatter(tx_x, tx_y, c="red", s=40, marker="^", zorder=5, label="Towers")
+        ax.legend(fontsize=8)
     ax.set_title("Achievable Rate (Mbps)")
     ax.set_xlabel(xlabel)
     ax.set_ylabel(ylabel)
-    ax.legend(fontsize=8)
     fig.colorbar(im0, ax=ax, label="Rate (Mbps)")
 
     # SINR map (dB)
@@ -259,11 +267,12 @@ def plot_evaluation(
         sinr_db.T, origin="lower", aspect="equal",
         extent=extent, cmap="plasma",
     )
-    ax.scatter(tx_x, tx_y, c="red", s=40, marker="^", zorder=5, label="Towers")
+    if tx_x is not None:
+        ax.scatter(tx_x, tx_y, c="red", s=40, marker="^", zorder=5, label="Towers")
+        ax.legend(fontsize=8)
     ax.set_title("SINR (dB)")
     ax.set_xlabel(xlabel)
     ax.set_ylabel(ylabel)
-    ax.legend(fontsize=8)
     fig.colorbar(im1, ax=ax, label="SINR (dB)")
 
     fig.tight_layout()

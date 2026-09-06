@@ -53,7 +53,6 @@ from pathlib import Path
 
 import numpy as np
 import yaml
-from sionna.rt import load_scene, scene as sionna_scenes
 
 from ia_spa.basis_functions import (
     candidate_locations_plot,
@@ -61,32 +60,7 @@ from ia_spa.basis_functions import (
     compute_basis_functions_resume,
     get_candidate_locations,
 )
-
-# Short aliases for the built-in Sionna scenes
-_BUILTIN_SCENES = {
-    "san_francisco": "san_francisco",
-    "sf":            "san_francisco",
-    "florence":      "florence",
-    "fl":            "florence",
-    "munich":        "munich",
-    "etoile":        "etoile",
-}
-
-
-def _load_scene(scene_arg: str, merge_shapes: bool):
-    """Load a built-in scene by name or a custom scene from an XML path."""
-    key = scene_arg.lower()
-    if key in _BUILTIN_SCENES:
-        scene_id = getattr(sionna_scenes, _BUILTIN_SCENES[key])
-        return load_scene(scene_id, merge_shapes=merge_shapes)
-    path = Path(scene_arg)
-    if not path.exists():
-        sys.exit(
-            f"ERROR: '{scene_arg}' is not a recognised built-in scene name "
-            f"and the file does not exist.\n"
-            f"Built-in names: {list(_BUILTIN_SCENES.keys())}"
-        )
-    return load_scene(str(path), merge_shapes=merge_shapes)
+from ia_spa.scenes import BUILTIN_SCENES, load_scene_arg
 
 
 def parse_args() -> argparse.Namespace:
@@ -96,8 +70,8 @@ def parse_args() -> argparse.Namespace:
     )
     p.add_argument(
         "--scene", required=True,
-        help="Built-in scene name (e.g. 'san_francisco', 'florence') "
-             "or path to a Sionna XML scene file.",
+        help=f"Built-in scene name ({', '.join(sorted(BUILTIN_SCENES))}) "
+             f"or path to a Sionna XML scene file.",
     )
     p.add_argument(
         "--output", required=True,
@@ -118,15 +92,26 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--dy", type=float, default=None, help="Grid Y step size in metres.")
     p.add_argument("--dz", type=float, default=None, help="Grid Z step size in metres.")
 
+    p.add_argument(
+        "--map-height", type=float, default=None,
+        help="Pin the radio-map plane to this height in metres and cover the "
+             "full scene bounding box. By default Sionna derives the plane "
+             "from the scene.",
+    )
+
     # Run control
     p.add_argument(
         "--resume", action="store_true",
         help="Resume an interrupted run from the last completed candidate.",
     )
+    p.add_argument(
+        "-y", "--yes", action="store_true",
+        help="Overwrite an existing output folder without prompting.",
+    )
     return p.parse_args()
 
 
-def main() -> None:
+def main() -> int:
     args = parse_args()
 
     # ------------------------------------------------------------------
@@ -142,6 +127,7 @@ def main() -> None:
     snr_gap_gamma  = float(cfg["link"]["snr_gap_gamma"])
     max_depth      = int(cfg["radio_map"]["max_depth"])
     samples_per_tx = int(cfg["radio_map"]["samples_per_tx"])
+    cell_size_m    = float(cfg["radio_map"].get("cell_size_m", 1.0))
 
     cand_cfg = cfg.get("candidates", {})
     dx = args.dx if args.dx is not None else float(cand_cfg.get("dx_m", 20.0))
@@ -151,7 +137,7 @@ def main() -> None:
     print(
         f"Config: power={power_dbm} dBm, freq={frequency_hz/1e9:.3f} GHz, "
         f"BW={bandwidth_hz/1e6:.1f} MHz, samples_per_tx={samples_per_tx:,}, "
-        f"max_depth={max_depth}"
+        f"max_depth={max_depth}, cell_size={cell_size_m} m"
     )
 
     sionna_dir = output_folder / "Sionna"
@@ -172,17 +158,22 @@ def main() -> None:
     else:
         # Fresh run: delete any existing output and recompute from scratch
         if output_folder.exists():
-            ans = input(
-                f"Output folder '{output_folder}' already exists.\n"
-                f"Delete it and recompute from scratch? [y/N] "
-            )
-            if ans.strip().lower() != "y":
-                sys.exit("Aborted.")
+            if not args.yes:
+                ans = input(
+                    f"Output folder '{output_folder}' already exists.\n"
+                    f"Delete it and recompute from scratch? [y/N] "
+                )
+                if ans.strip().lower() != "y":
+                    sys.exit("Aborted.")
             shutil.rmtree(output_folder)
             print(f"Deleted '{output_folder}'.")
 
         # Compute candidate positions
-        scene_for_bbox = _load_scene(args.scene, merge_shapes=False)
+        try:
+            scene_for_bbox = load_scene_arg(args.scene, merge_shapes=False)
+        except FileNotFoundError as exc:
+            print(f"ERROR: {exc}", file=sys.stderr)
+            return 2
 
         if args.user_positions is not None:
             up = Path(args.user_positions)
@@ -202,7 +193,11 @@ def main() -> None:
     # ------------------------------------------------------------------
     # Step 2: Compute (or resume) basis functions
     # ------------------------------------------------------------------
-    scene_rt = _load_scene(args.scene, merge_shapes=True)
+    try:
+        scene_rt = load_scene_arg(args.scene, merge_shapes=True)
+    except FileNotFoundError as exc:
+        print(f"ERROR: {exc}", file=sys.stderr)
+        return 2
 
     params = dict(
         power_dbm=power_dbm,
@@ -211,6 +206,8 @@ def main() -> None:
         max_depth=max_depth,
         samples_per_tx=samples_per_tx,
         frequency_hz=frequency_hz,
+        cell_size_m=cell_size_m,
+        receiver_height_m=args.map_height,
     )
 
     if args.resume:
@@ -219,7 +216,8 @@ def main() -> None:
         compute_basis_functions(scene_rt, candidates, output_folder, **params)
 
     print("Done.")
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

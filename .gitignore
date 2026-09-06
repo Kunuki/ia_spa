@@ -1,0 +1,32 @@
+# Byte-compiled / cache
+__pycache__/
+*.py[cod]
+*.so
+
+# Packaging / build artefacts
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# Environments
+.venv/
+venv/
+env/
+
+# Test and coverage artefacts
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Data and results (see the Data section of README.md)
+data/
+*.npy
+*.npz
+!tests/**/*.npy
+
+# Editors / OS
+.ipynb_checkpoints/
+.vscode/
+.idea/
+.DS_Store

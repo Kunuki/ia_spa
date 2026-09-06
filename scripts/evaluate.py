@@ -34,38 +34,23 @@ from pathlib import Path
 
 import numpy as np
 import yaml
-from sionna.rt import PlanarArray, load_scene, scene as sionna_scenes
 
 from ia_spa.metrics import evaluate_and_save, load_greedy_positions, plot_evaluation
-
-_BUILTIN_SCENES = {
-    "san_francisco": "san_francisco",
-    "sf":            "san_francisco",
-    "florence":      "florence",
-    "fl":            "florence",
-    "munich":        "munich",
-    "etoile":        "etoile",
-}
+from ia_spa.scenes import BUILTIN_SCENES, load_scene_arg
 
 
 def _load_scene(scene_arg: str, frequency_hz: float):
-    key = scene_arg.lower()
-    if key in _BUILTIN_SCENES:
-        scene_id = getattr(sionna_scenes, _BUILTIN_SCENES[key])
-        s = load_scene(scene_id, merge_shapes=False)
-    else:
-        path = Path(scene_arg)
-        if not path.exists():
-            sys.exit(
-                f"ERROR: '{scene_arg}' is not a recognised built-in scene name "
-                f"and the file does not exist.\n"
-                f"Built-in names: {list(_BUILTIN_SCENES.keys())}"
-            )
-        s = load_scene(str(path), merge_shapes=False)
+    """Load the scene and give it the single isotropic antenna used throughout."""
+    from sionna.rt import PlanarArray  # GPU / Sionna required
 
-    s.tx_array = PlanarArray(num_rows=1, num_cols=1, pattern="iso", polarization="V")
-    s.frequency = frequency_hz
-    return s
+    return load_scene_arg(
+        scene_arg,
+        merge_shapes=False,
+        frequency_hz=frequency_hz,
+        tx_array=PlanarArray(
+            num_rows=1, num_cols=1, pattern="iso", polarization="V"
+        ),
+    )
 
 
 def parse_args() -> argparse.Namespace:
@@ -80,8 +65,9 @@ def parse_args() -> argparse.Namespace:
     )
     p.add_argument(
         "--scene", default=None,
-        help="Built-in scene name or path to a Sionna XML file. "
-             "Defaults to the value stored in <results>/scene.txt.",
+        help=f"Built-in scene name ({', '.join(sorted(BUILTIN_SCENES))}) or "
+             f"path to a Sionna XML file. Defaults to the value stored in "
+             f"<results>/scene.txt.",
     )
     p.add_argument(
         "--n-towers", type=int, default=None,
@@ -99,7 +85,7 @@ def parse_args() -> argparse.Namespace:
     return p.parse_args()
 
 
-def main() -> None:
+def main() -> int:
     args = parse_args()
     results_folder = Path(args.results)
     save_dir = results_folder.parent / (results_folder.name + "_Processed")
@@ -111,10 +97,12 @@ def main() -> None:
     if scene_arg is None:
         scene_file = results_folder / "scene.txt"
         if not scene_file.exists():
-            sys.exit(
-                "ERROR: No scene specified and results/scene.txt not found.\n"
-                "Pass --scene to specify the scene explicitly."
+            print(
+                f"ERROR: No scene specified and '{scene_file}' not found.\n"
+                f"Pass --scene to specify the scene explicitly.",
+                file=sys.stderr,
             )
+            return 2
         scene_arg = scene_file.read_text().strip()
         print(f"Scene resolved from results/scene.txt: '{scene_arg}'")
 
@@ -129,18 +117,36 @@ def main() -> None:
     heights       = cfg["receiver"]["heights_m"]
     bandwidth_hz  = float(cfg["link"]["bandwidth_hz"])
     snr_gap_gamma = float(cfg["link"]["snr_gap_gamma"])
+    cell_size_m   = float(cfg["radio_map"].get("cell_size_m", 1.0))
 
     # ------------------------------------------------------------------
     # Load scene
     # ------------------------------------------------------------------
-    scene = _load_scene(scene_arg, frequency_hz)
+    try:
+        scene = _load_scene(scene_arg, frequency_hz)
+    except FileNotFoundError as exc:
+        print(f"ERROR: {exc}", file=sys.stderr)
+        return 2
 
     # ------------------------------------------------------------------
     # Load optimised tower positions
     # ------------------------------------------------------------------
+    locations_file = results_folder / "Locations.txt"
+    if not locations_file.exists():
+        print(
+            f"ERROR: '{locations_file}' not found. Run scripts/run_optimizer.py "
+            f"first, or point --results at a finished run.",
+            file=sys.stderr,
+        )
+        return 2
+
     positions = load_greedy_positions(results_folder)
     if args.n_towers is not None:
         positions = positions[: args.n_towers]
+    if len(positions) == 0:
+        print(f"ERROR: '{locations_file}' contains no tower positions.",
+              file=sys.stderr)
+        return 2
 
     print(f"Evaluating {len(positions)} tower(s) from '{results_folder}'.")
 
@@ -150,7 +156,7 @@ def main() -> None:
     run_name = results_folder.name
     evaluate_and_save(
         scene, run_name, positions, save_dir,
-        heights, power_dbm, bandwidth_hz, snr_gap_gamma,
+        heights, power_dbm, bandwidth_hz, snr_gap_gamma, cell_size_m,
     )
 
     if args.plot:
@@ -165,7 +171,8 @@ def main() -> None:
         )
 
     print(f"Results saved to '{save_dir}'.")
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

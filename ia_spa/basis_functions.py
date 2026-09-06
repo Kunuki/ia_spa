@@ -50,12 +50,11 @@ import shutil
 from pathlib import Path
 from typing import Literal, Optional, Tuple
 
-import imageio.v2 as imageio
-import matplotlib.pyplot as plt
 import numpy as np
-import plotly.graph_objects as go
 from scipy.spatial import cKDTree
 from tqdm import tqdm
+
+from ia_spa.data import load_locations
 
 
 # ---------------------------------------------------------------------------
@@ -264,6 +263,8 @@ def compute_basis_functions(
     max_depth: int = 5,
     samples_per_tx: int = int(1e6),
     frequency_hz: float = 1.8e9,
+    cell_size_m: float = 1.0,
+    receiver_height_m: Optional[float] = None,
     start_idx: int = 0,
 ) -> None:
     """Compute and save one rate-map ``.npy`` per candidate transmitter.
@@ -303,9 +304,23 @@ def compute_basis_functions(
         Monte Carlo ray samples per transmitter per call.
     frequency_hz : float
         Carrier frequency in Hz.
+    cell_size_m : float
+        Radio-map pixel resolution in metres.
+    receiver_height_m : float or None
+        Height of the radio-map plane above the scene origin.  When *None*
+        (the default) Sionna picks the plane from the scene itself, which is
+        the behaviour the published results use.  Set it to pin the map plane
+        explicitly; the XY extent then covers the full scene bounding box.
     start_idx : int
         Index of the first candidate to process.  Set automatically by
         :func:`compute_basis_functions_resume`; leave at 0 for a fresh run.
+
+    Raises
+    ------
+    RuntimeError
+        If two candidates produce radio maps of different shapes.  The
+        optimiser aggregates the maps cell by cell, so they must all share
+        one grid; this check fails fast instead of writing a corrupt set.
     """
     from sionna.rt import PlanarArray, RadioMapSolver, Transmitter  # GPU required
 
@@ -333,21 +348,59 @@ def compute_basis_functions(
     noise_watts = 10 ** ((-174 + 10 * np.log10(bandwidth_hz)) / 10)
     p_tx_watts = 10 ** ((power_dbm - 30) / 10)
 
+    # Pinning the map plane is optional; when it is requested the grid is
+    # derived from the scene bounding box so that it is identical for every
+    # candidate transmitter.
+    grid_kwargs = {}
+    if receiver_height_m is not None:
+        bbox = sionna_scene._scene.bbox()
+        grid_kwargs = dict(
+            center=[
+                0.5 * (bbox.min[0] + bbox.max[0]),
+                0.5 * (bbox.min[1] + bbox.max[1]),
+                receiver_height_m,
+            ],
+            orientation=[0.0, 0.0, 0.0],
+            size=[bbox.max[0] - bbox.min[0], bbox.max[1] - bbox.min[1]],
+        )
+
+    expected_shape = _existing_map_shape(sionna_dir) if start_idx > 0 else None
+
     for i in tqdm(range(start_idx, len(candidates)), desc="Computing basis functions"):
         tx.position = candidates[i].tolist()
 
         rm = solver(
             scene=sionna_scene,
-            cell_size=[1.0, 1.0],
+            cell_size=[cell_size_m, cell_size_m],
             max_depth=max_depth,
             samples_per_tx=samples_per_tx,
+            **grid_kwargs,
         )
 
         pg = np.maximum(rm.path_gain.numpy(), 1e-30)
         p_rx = p_tx_watts * pg
         sinr = p_rx[0] / noise_watts
         rate = bandwidth_hz * np.log2(1.0 + sinr / snr_gap_gamma)
+
+        if expected_shape is None:
+            expected_shape = rate.shape
+        elif rate.shape != expected_shape:
+            raise RuntimeError(
+                f"Candidate {i} produced a radio map of shape {rate.shape}, but "
+                f"the earlier candidates produced {expected_shape}. All basis "
+                f"functions must share one grid. Pass receiver_height_m to pin "
+                f"the map plane explicitly."
+            )
+
         np.save(sionna_dir / f"{i}.npy", rate)
+
+
+def _existing_map_shape(sionna_dir: Path) -> Optional[tuple]:
+    """Shape of an already-computed radio map, or None if there are none."""
+    for path in sionna_dir.glob("*.npy"):
+        if path.stem.isdigit():
+            return np.load(path, mmap_mode="r").shape
+    return None
 
 
 def compute_basis_functions_resume(
@@ -373,10 +426,7 @@ def compute_basis_functions_resume(
     output_folder = Path(output_folder)
     sionna_dir = output_folder / "Sionna"
 
-    with open(sionna_dir / "0_Coordinates.txt") as fh:
-        candidates = np.array(
-            [[float(v) for v in line.strip().split(", ")[1:]] for line in fh]
-        )
+    candidates = load_locations(sionna_dir / "0_Coordinates.txt")
 
     existing = [int(f.stem) for f in sionna_dir.glob("*.npy") if f.stem.isdigit()]
     start_idx = max(existing) + 1 if existing else 0
@@ -407,6 +457,8 @@ def candidate_locations_plot(
     save_path : str or Path
         Output file path.
     """
+    import plotly.graph_objects as go  # optional: pip install "ia_spa[viz]"
+
     fig = go.Figure(
         go.Scatter3d(
             x=candidates[:, 0],
@@ -450,6 +502,9 @@ def basis_function_gif(
     output_path : str
         Output GIF file path.
     """
+    import imageio.v2 as imageio  # optional: pip install "ia_spa[viz]"
+    import matplotlib.pyplot as plt
+
     sionna_dir = Path(sionna_dir)
     indices = sorted(int(f.stem) for f in sionna_dir.glob("*.npy") if f.stem.isdigit())
     tmp = Path("_tmp_gif_frames")
