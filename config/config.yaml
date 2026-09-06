@@ -16,6 +16,9 @@ paths:
   # Reference carrier tower locations (.npy arrays, shape N x 3)
   tower_data: data/TowerData
 
+  # Scene-derived map data (SDF grids and similar), used by the notebooks
+  map_data: data/MapData
+
   # Greedy optimiser outputs
   results: data/Results
 
@@ -30,6 +33,7 @@ scene:
 # ----------------------------------------------------------
 transmitter:
   power_dbm: 40.0           # Transmit power  [dBm]
+  tower_height_m: 20.0      # Mast height above local terrain  [m]
 
 # ----------------------------------------------------------
 # Receiver parameters
@@ -74,3 +78,4 @@ optimizer:
   aggregation: max          # 'max' (P_MAX, realistic) or 'sum' (P_SUM, upper bound)
   n_iter: 20                # Number of transmitters to place per run
   utility_c: 1.0e8          # Saturation constant c in W_bar(x) = x / (x + c)
+                            # Same units as the radio maps; 1e8 = 100 Mbps.
